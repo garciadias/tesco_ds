@@ -3,7 +3,7 @@ tesco_dataset_types = {
     "crime_rate": "float64",
     "proportion_flats": "float64",
     "proportion_nonretail": "float64",
-    "new_store": "bool",
+    "new_store": "object",
     "commercial_property": "float64",
     "household_size": "float64",
     "proportion_newbuilds": "float64",
