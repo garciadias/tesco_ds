@@ -185,6 +185,7 @@ def bland_altman_plot(df_predicted):
     df_bland_altman["pred_real_diff"] = (
         df_bland_altman["normalised_sales"] - df_bland_altman["predicted_normalised_sales"]
     )
+    df_bland_altman_validation = df_bland_altman[df_bland_altman["dataset"] == "validation"]
     fig, ax = plt.subplots(1, 1, figsize=(16 * 0.7, 9 * 0.7))
     sns.scatterplot(
         data=df_bland_altman,
@@ -194,20 +195,20 @@ def bland_altman_plot(df_predicted):
         palette=[TESCO_COLORS["light_blue"], TESCO_COLORS["red"]],
         ax=ax,
     )
-    ax.axhline(0, color=TESCO_COLORS["yellow"], linestyle="--")
-    ax.axhline(df_bland_altman["pred_real_diff"].mean(), color=TESCO_COLORS["green"], linestyle="--")
+    ax.axhline(0, color=TESCO_COLORS["yellow"], linestyle="-")
+    ax.axhline(df_bland_altman_validation["pred_real_diff"].mean(), color=TESCO_COLORS["green"], linestyle="--")
     ax.axhline(
-        df_bland_altman["pred_real_diff"].mean() + 1.96 * df_bland_altman["pred_real_diff"].std(),
+        df_bland_altman_validation["pred_real_diff"].mean() + 1.96 * df_bland_altman_validation["pred_real_diff"].std(),
         color=TESCO_COLORS["green"],
         linestyle="--",
     )
     ax.axhline(
-        df_bland_altman["pred_real_diff"].mean() - 1.96 * df_bland_altman["pred_real_diff"].std(),
+        df_bland_altman_validation["pred_real_diff"].mean() - 1.96 * df_bland_altman_validation["pred_real_diff"].std(),
         color=TESCO_COLORS["green"],
         linestyle="--",
     )
     ax.set_xlabel("Mean of predicted and real values", fontsize=20)
-    ax.set_ylabel("Difference between predicted\nand real values", fontsize=20)
+    ax.set_ylabel("Real - Predicted values", fontsize=20)
     ax.set_title("Bland–Altman plot", fontsize=20)
     xlim = plt.xlim()
     ylim = plt.ylim()
@@ -218,8 +219,8 @@ def bland_altman_plot(df_predicted):
     plt.text(
         xlim[0] + (xlim[1] - xlim[0]) * 0.05,
         ylim[1] - (ylim[1] - ylim[0]) * 0.1,
-        f"Mean difference: {df_bland_altman['pred_real_diff'].mean():.3f}\n"
-        f"± 1.96 * std: {1.96 * df_bland_altman['pred_real_diff'].std():.3f}",
+        f"Validation Mean difference: {df_bland_altman_validation['pred_real_diff'].mean():.3f}\n"
+        f"± 1.96 * std: {1.96 * df_bland_altman_validation['pred_real_diff'].std():.3f}",
         fontsize=16,
         color="black",
     )
@@ -363,13 +364,3 @@ if __name__ == "__main__":
     print(test_set.set_index("location_id")[["normalised_sales", "sales_quartile"]].sort_values(
         "normalised_sales", ascending=False
     ))
-    # %%
-    print("# Model hyperparameters")
-    final_model_params = pd.Series(final_model.named_steps["Regressor"].get_params(), name="Parameter")
-    print("# Baseline model")
-    baseline_model_params = pd.Series(baseline_regressor.named_steps["Regressor"].get_params(), name="Parameter")
-    print(pd.concat([final_model_params, baseline_model_params], axis=1))
-    # %%
-    test_set.set_index("location_id")[["normalised_sales", "sales_quartile"]].sort_values("normalised_sales", ascending=False)
-
-# %%
