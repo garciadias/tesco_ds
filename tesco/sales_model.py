@@ -9,9 +9,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import shap
-from IPython.display import display
+
 from sklearn.compose import ColumnTransformer
-from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
@@ -20,17 +19,16 @@ from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 
 from tesco.constants import TESCO_COLORS
 from tesco.data.preprocessing import load_preprocessed_data
-
-# fix random seed for reproducibility
-np.random.seed(1919)
+from scipy.stats import randint
 
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Remove columns and nan values."""
+    """Remove unwanted columns."""
     # Drop columns that are not useful for model training
     df = df.drop(
         columns=[
             "county",
+            "county_code",
         ]
     )
     df.set_index("location_id", inplace=True)
@@ -147,7 +145,10 @@ def compare_original_and_predicted_data(df_original, df_predicted):
         alpha=0.7,
         ax=ax1,
     )
-    ax1.set_title("Model predictions Households affluency")
+    ax1.set_title("Model predictions Households Affluency", fontsize=16)
+    ax1.set_xlabel("Household Affluency", fontsize=16)
+    ax1.set_ylabel("Normalised Sales", fontsize=16)
+    ax1.legend(fontsize=16)
     sns.scatterplot(
         data=df_original[df_original["is_train"].astype(bool)],
         x="household_size",
@@ -165,9 +166,11 @@ def compare_original_and_predicted_data(df_original, df_predicted):
         palette=[TESCO_COLORS["light_blue"], TESCO_COLORS["yellow"], TESCO_COLORS["red"]],
         alpha=0.7,
         ax=ax2,
+        legend=False,
     )
-    ax2.set_title("Model predictions Household size")
-    plt.tight_layout()
+    ax2.set_title("Model predictions Households Size", fontsize=16)
+    ax2.set_xlabel("Household Size", fontsize=16)
+    ax2.set_ylabel("Normalised Sales", fontsize=16)
     return fig
 
 
@@ -182,28 +185,30 @@ def bland_altman_plot(df_predicted):
     df_bland_altman["pred_real_diff"] = (
         df_bland_altman["normalised_sales"] - df_bland_altman["predicted_normalised_sales"]
     )
+    fig, ax = plt.subplots(1, 1, figsize=(16 * 0.7, 9 * 0.7))
     sns.scatterplot(
         data=df_bland_altman,
         x="pred_real_mean",
         y="pred_real_diff",
         hue="dataset",
         palette=[TESCO_COLORS["light_blue"], TESCO_COLORS["red"]],
+        ax=ax,
     )
-    plt.axhline(0, color=TESCO_COLORS["yellow"], linestyle="--")
-    plt.axhline(df_bland_altman["pred_real_diff"].mean(), color=TESCO_COLORS["green"], linestyle="--")
-    plt.axhline(
+    ax.axhline(0, color=TESCO_COLORS["yellow"], linestyle="--")
+    ax.axhline(df_bland_altman["pred_real_diff"].mean(), color=TESCO_COLORS["green"], linestyle="--")
+    ax.axhline(
         df_bland_altman["pred_real_diff"].mean() + 1.96 * df_bland_altman["pred_real_diff"].std(),
         color=TESCO_COLORS["green"],
         linestyle="--",
     )
-    plt.axhline(
+    ax.axhline(
         df_bland_altman["pred_real_diff"].mean() - 1.96 * df_bland_altman["pred_real_diff"].std(),
         color=TESCO_COLORS["green"],
         linestyle="--",
     )
-    plt.xlabel("Mean of predicted and real values")
-    plt.ylabel("Difference between predicted and real values")
-    plt.title("Bland–Altman plot")
+    ax.set_xlabel("Mean of predicted and real values", fontsize=20)
+    ax.set_ylabel("Difference between predicted\nand real values", fontsize=20)
+    ax.set_title("Bland–Altman plot", fontsize=20)
     xlim = plt.xlim()
     ylim = plt.ylim()
     plt.ylim(-1 * max(np.abs(ylim)), max(np.abs(ylim)))
@@ -215,44 +220,69 @@ def bland_altman_plot(df_predicted):
         ylim[1] - (ylim[1] - ylim[0]) * 0.1,
         f"Mean difference: {df_bland_altman['pred_real_diff'].mean():.3f}\n"
         f"± 1.96 * std: {1.96 * df_bland_altman['pred_real_diff'].std():.3f}",
-        fontsize=12,
+        fontsize=16,
         color="black",
     )
     # move legend outside of the plot
-    plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+    plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=16)
     plt.tight_layout()
-    return plt
+    return fig
+
+
+def feature_importance_analysis(model, X_train):  # noqa
+    X_train_shap = model.named_steps["Preprocessor"].transform(X_train.dropna())  # noqa
+    model_predict = model.named_steps["Regressor"].predict
+    explainer = shap.Explainer(model_predict, X_train_shap)
+    shap_values_train = explainer(X_train_shap)
+    numeric_features = X_train.select_dtypes(include=["number"]).columns
+    categorical_features = X_train.select_dtypes(include=["object", "string"]).columns
+    feature_names = list(numeric_features) + list(
+        model.named_steps["Preprocessor"].transformers_[1][1].get_feature_names_out(categorical_features)
+    )
+    fig, ax = plt.subplots(1, 1, figsize=(16 * 0.7, 9 * 0.7))
+    shap_values = pd.Series(shap_values_train.values.mean(axis=0), index=feature_names).sort_values(ascending=False)
+    sns.barplot(x=shap_values, y=shap_values.index, ax=ax, color=TESCO_COLORS["blue"], orient="h")
+    ax.vlines(0, -1, len(feature_names), color=TESCO_COLORS["red"], linestyle="--", linewidth=3.5)
+    ax.set_title("Feature importance based on SHAP values", fontsize=20)
+    ax.set_xlabel("Mean SHAP value", fontsize=16)
+    ax.set_ylabel("Feature", fontsize=16)
+    ax.tick_params(axis="both", labelsize=14)
+    # number bars ordering by absolute value
+    abs_shap_values = shap_values.abs().sort_values(ascending=False)
+    for i, (var_name, shap_value) in enumerate(shap_values.items()):
+        position = [position + 1 for position, name in enumerate(abs_shap_values.index) if name == var_name][0]
+        x_position = shap_value * 1.01 if shap_value > 0 else 0.0001
+        ax.text(x_position, i, f"{position}", color="black", va="center", fontsize=14)
+    plt.grid(True)
+    plt.minorticks_on()
+    plt.tight_layout()
+    return fig
 
 
 # %%
 if __name__ == "__main__":
     # %%
-    random_state = 1919
     df = load_preprocessed_data("tesco_dataset")
-    df = clean_data(df)
-    # %%
-    X_train, X_val, X_test, y_train, y_val, y_test = split_data(df, random_state)
-    # %%
+    df["county_code"] = df["county"].astype("int")
+    # Remove the county column and set location_id as the Index
+    Xy = clean_data(df.copy())
+    # Split the data for Training, validating and testing accordingly
+    random_state = 1919
+    # fix random seed for reproducibility
+    np.random.seed(random_state)
+    X_train, X_val, X_test, y_train, y_val, y_test = split_data(Xy, random_state)
+    # Create a pipeline to handle preprocessing and model training
+    # The pipeline applies Standard Scaling of the numerical variables and One Hot Encoding of the categorical variables
     numeric_features = X_train.select_dtypes(include=["number"]).columns
     categorical_features = X_train.select_dtypes(include=["object", "string"]).columns
-    # %%
+    # The pipeline is flexible to the use of different models. In this case, we are sticking to the requirement of using
+    # Random Forest
     model_pipeline = create_pipeline(RandomForestRegressor(), numeric_features, categorical_features)
-    # Fit the model
+    # %%
+    # Use RandomizedSearchCV to optimise the hyperparameters of the model
     param_grid = {
-        "Regressor__bootstrap": [True, False],
-        "Regressor__criterion": ["squared_error"],
-        "Regressor__max_depth": [2, 4, 7, 10, 20, None],
-        "Regressor__max_features": ["log2", "sqrt", None, 1.0, 0.5],
-        "Regressor__min_samples_leaf": [1, 2, 4],
-        "Regressor__min_samples_split": [2, 5, 10],
-        "Regressor__n_estimators": [10, 100, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000],
-        "Regressor__random_state": [
-            random_state,
-            random_state - 10,
-            random_state + 20,
-            random_state + 3,
-            random_state + 4,
-        ],
+        "Regressor__n_estimators": [80, 100, 120, 200],
+        "Regressor__random_state": randint(random_state - 10, random_state + 10),
     }
     regressor = RandomizedSearchCV(
         model_pipeline,
@@ -260,14 +290,18 @@ if __name__ == "__main__":
         n_iter=100,
         scoring="neg_mean_squared_error",
         n_jobs=-1,
-        cv=5,
+        cv=2,
         random_state=random_state,
         verbose=1,
     )
     regressor.fit(X_train, y_train)
     # %%
-    baseline_regressor = create_pipeline(DummyRegressor(), numeric_features, categorical_features)
+    # Train a baseline model for comparison. I have compared it with a Dummy Regressor, as a Linear Regressor,
+    # but here I will use a non-optimised model as a comparison.
+    baseline_regressor = create_pipeline(RandomForestRegressor(random_state=random_state), numeric_features,
+                                         categorical_features)
     baseline_regressor.fit(X_train, y_train)
+    # %%
     y_val_pred = regressor.predict(X_val)
     y_train_pred = regressor.predict(X_train)
     y_test_pred, final_model = test_set_prediction(X_train, X_val, X_test, y_train, y_val, regressor)
@@ -282,15 +316,34 @@ if __name__ == "__main__":
     )
     model_metrics = metrics(df_complete, "normalised_sales", "predicted_normalised_sales")
     model_metrics_baseline = metrics(
-        df_complete_baseline, "normalised_sales", "predicted_normalised_sales", "Dummy Regressor"
+        df_complete_baseline, "normalised_sales", "predicted_normalised_sales", "Vanilla Random Forest Regressor"
     )
     metrics_comparison = pd.concat([model_metrics, model_metrics_baseline], axis=1)
-    display(metrics_comparison)
-
+    print("# Creating Table 2: Model Performance Metrics")
+    print(metrics_comparison)
     # %%
     model_path = "models/tesco_dataset/"
     os.makedirs(model_path, exist_ok=True)
-    model_file = "tesco_sales_model.pkl"
+    # %%
+    print("# Creating Figure 4a: Visual inspection of predictions")
+    fig = bland_altman_plot(df_complete)
+    fig.savefig("models/tesco_dataset/tesco_sales_model_bland_altman_plot.png")
+    plt.close()
+    print("Bland-Altman plot saved saved at models/tesco_dataset/tesco_sales_model_bland_altman_plot.png")
+    print("# Creating Figure 4b")
+    fig = compare_original_and_predicted_data(df, df_complete)
+    fig.savefig("models/tesco_dataset/tesco_sales_model_real_data_comparison.png")
+    plt.close()
+    print("Real data comparison saved at models/tesco_dataset/tesco_sales_model_real_data_comparison.png")
+    # %%
+    # Feature importance analysis
+    print("# Creating Figure 5")
+    feature_importance_analysis(final_model, X_train)
+    plt.close()
+    print("Feature importance analysis saved at models/tesco_dataset/tesco_sales_model_feature_importance.png")
+    # %%
+    # Save model results
+    model_file = "tesco_pkl"
     results_file = "tesco_sales_model_results.csv"
     metrics_file = "tesco_sales_model_metrics.csv"
     metrics_comparison.to_csv(f"{model_path}{metrics_file}")
@@ -298,27 +351,25 @@ if __name__ == "__main__":
     test_set = df[~df["is_train"]].copy()
     test_set.loc[:, "normalised_sales"] = y_test_pred
     sales_quantiles = df["normalised_sales"].quantile([0.25, 0.5, 0.75])
-    test_set["sales_quartile"] = pd.qcut(test_set["normalised_sales"], q=4, labels=["bottom_25%", "bottom_50%", "top_50%", "top_25%"])
+    test_set["sales_quartile"] = pd.qcut(
+        test_set["normalised_sales"],
+        q=100,
+        labels=[f"top {100 - percent}%" if percent > 50 else f"bottom {percent}%" for percent in range(0, 100, 1)],
+    )
     test_set.sort_values("normalised_sales", ascending=False, inplace=True)
     test_set.to_csv(f"{model_path}{results_file}")
     joblib.dump(final_model, f"{model_path}{model_file}")
+    print("# Create Table 3: Predicted sales")
+    print(test_set.set_index("location_id")[["normalised_sales", "sales_quartile"]].sort_values(
+        "normalised_sales", ascending=False
+    ))
     # %%
-    fig = compare_original_and_predicted_data(df, df_complete)
-    fig.savefig("models/tesco_dataset/tesco_sales_model_real_data_comparison.png")
-    plt.close()
-    fig = bland_altman_plot(df_complete)
-    fig.savefig("models/tesco_dataset/tesco_sales_model_bland_altman_plot.png")
-    plt.close()
+    print("# Model hyperparameters")
+    final_model_params = pd.Series(final_model.named_steps["Regressor"].get_params(), name="Parameter")
+    print("# Baseline model")
+    baseline_model_params = pd.Series(baseline_regressor.named_steps["Regressor"].get_params(), name="Parameter")
+    print(pd.concat([final_model_params, baseline_model_params], axis=1))
     # %%
-    # SHAP
-    X_train_shap = final_model.named_steps["Preprocessor"].transform(X_train.dropna())
-    model_predict = final_model.named_steps["Regressor"].predict
-    explainer = shap.Explainer(model_predict, X_train_shap)
-    shap_values_train = explainer(X_train_shap)
-    # %%
-    feature_names = (
-        list(numeric_features) +
-        list(final_model.named_steps["Preprocessor"].transformers_[1][1].get_feature_names_out(categorical_features))
-    )
-    shap.summary_plot(shap_values_train, X_train_shap, feature_names=feature_names)
-    plt.savefig("models/tesco_dataset/tesco_sales_model_shap_summary_plot.png", dpi=300)
+    test_set.set_index("location_id")[["normalised_sales", "sales_quartile"]].sort_values("normalised_sales", ascending=False)
+
+# %%
