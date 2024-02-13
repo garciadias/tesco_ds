@@ -103,3 +103,5 @@ sales_correlated_features = (
 # %%
 sales_correlated_features
 # %%
+df["location_id"].value_counts().max()
+# %%
