@@ -162,8 +162,8 @@ def compare_original_and_predicted_data(df_original, df_predicted):
         x="household_size",
         y="normalised_sales",
         color="gray",
-        label="Real values",
         alpha=0.5,
+        legend=False,
         ax=ax2,
     )
     sns.scatterplot(
@@ -191,7 +191,7 @@ def compare_original_and_predicted_data(df_original, df_predicted):
         x="crime_rate",
         y="normalised_sales",
         color="gray",
-        label="Real values",
+        legend=False,
         alpha=0.5,
         ax=ax3,
     )
@@ -225,10 +225,10 @@ def bland_altman_plot(df_predicted):
     df_bland_altman = df_bland_altman[df_bland_altman["dataset"].isin(["training", "validation"])]
 
     df_bland_altman["pred_real_mean"] = (
-        df_bland_altman["normalised_sales"] + df_bland_altman["predicted_normalised_sales"]
+        df_bland_altman["predicted_normalised_sales"] + df_bland_altman["normalised_sales"]
     ) / 2
     df_bland_altman["pred_real_diff"] = (
-        df_bland_altman["normalised_sales"] - df_bland_altman["predicted_normalised_sales"]
+        df_bland_altman["predicted_normalised_sales"] - df_bland_altman["normalised_sales"]
     )
     df_bland_altman_validation = df_bland_altman[df_bland_altman["dataset"] == "validation"]
     fig, ax = plt.subplots(1, 1, figsize=(16 * 0.7, 9 * 0.7))
@@ -240,20 +240,20 @@ def bland_altman_plot(df_predicted):
         palette=[TESCO_COLORS["light_blue"], TESCO_COLORS["red"]],
         ax=ax,
     )
-    ax.axhline(0, color=TESCO_COLORS["yellow"], linestyle="-")
-    ax.axhline(df_bland_altman_validation["pred_real_diff"].mean(), color=TESCO_COLORS["green"], linestyle="--")
+    ax.axhline(0, color=TESCO_COLORS["green"], linestyle="-")
+    ax.axhline(df_bland_altman_validation["pred_real_diff"].mean(), color=TESCO_COLORS["red"], linestyle="--")
     ax.axhline(
         df_bland_altman_validation["pred_real_diff"].mean() + 1.96 * df_bland_altman_validation["pred_real_diff"].std(),
-        color=TESCO_COLORS["green"],
+        color=TESCO_COLORS["yellow"],
         linestyle="--",
     )
     ax.axhline(
         df_bland_altman_validation["pred_real_diff"].mean() - 1.96 * df_bland_altman_validation["pred_real_diff"].std(),
-        color=TESCO_COLORS["green"],
+        color=TESCO_COLORS["yellow"],
         linestyle="--",
     )
     ax.set_xlabel("Mean of predicted and real values", fontsize=20)
-    ax.set_ylabel("Real - Predicted values", fontsize=20)
+    ax.set_ylabel("Predicted values - Real", fontsize=20)
     ax.set_title("Bland–Altman plot", fontsize=20)
     xlim = plt.xlim()
     ylim = plt.ylim()

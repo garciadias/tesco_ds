@@ -16,6 +16,7 @@ tabulate = "^0.9.0"
 scikit-learn = "^1.4.0"
 xgboost = "^2.0.3"
 shap = "^0.44.1"
+ipywidgets = "^8.1.2"
 
 
 [tool.poetry.group.dev.dependencies]
