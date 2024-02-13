@@ -8,4 +8,5 @@ TESCO_COLORS = {
     "purple": "#991384",
     "black": "#000000",
     "white": "#ffffff",
+    "grey": "#808080",
 }
