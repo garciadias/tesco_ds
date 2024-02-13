@@ -126,95 +126,45 @@ def metrics(df_complete, original_column, predicted_column, model_name="Random F
 def compare_original_and_predicted_data(df_original, df_predicted):
     # Plot the results
     # Scatter plot
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 9))
-    sns.scatterplot(
-        data=df_original[df_original["is_train"].astype(bool)],
-        x="household_affluency",
-        y="normalised_sales",
-        color="gray",
-        label="Real values",
-        alpha=0.5,
-        ax=ax1,
-    )
-    sns.scatterplot(
-        data=df_predicted,
-        x="household_affluency",
-        y="predicted_normalised_sales",
-        hue="dataset",
-        palette=[TESCO_COLORS["light_blue"], TESCO_COLORS["yellow"], TESCO_COLORS["red"]],
-        alpha=0.7,
-        ax=ax1,
-    )
-    ax1.set_title("Model predictions Households Affluency", fontsize=16)
-    ax1.set_xlabel("Household Affluency", fontsize=16)
-    ax1.set_ylabel("Normalised Sales", fontsize=16)
-    ax1.legend(fontsize=16)
-    # add labels to the test set points
-    for location_id in df_predicted[df_predicted["dataset"] == "test"]["location_id"]:
-        ax1.text(
-            df_predicted.loc[df_predicted["location_id"] == location_id, "household_affluency"].values[0],
-            df_predicted.loc[df_predicted["location_id"] == location_id, "predicted_normalised_sales"].values[0],
-            location_id,
-            fontsize=12,
+    main_columns = ["household_affluency", "household_size", "crime_rate", "public_transport_dist"]
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(16, 9))
+    for ax, col in zip([ax1, ax2, ax3, ax4], main_columns):
+        sns.scatterplot(
+            data=df_original[df_original["is_train"].astype(bool)],
+            x=col,
+            y="normalised_sales",
+            color="gray",
+            label="Real values" if col == main_columns[0] else None,
+            alpha=0.5,
+            legend=True if col == main_columns[0] else False,
+            ax=ax,
         )
-    sns.scatterplot(
-        data=df_original[df_original["is_train"].astype(bool)],
-        x="household_size",
-        y="normalised_sales",
-        color="gray",
-        alpha=0.5,
-        legend=False,
-        ax=ax2,
-    )
-    sns.scatterplot(
-        data=df_predicted,
-        x="household_size",
-        y="predicted_normalised_sales",
-        hue="dataset",
-        palette=[TESCO_COLORS["light_blue"], TESCO_COLORS["yellow"], TESCO_COLORS["red"]],
-        alpha=0.7,
-        ax=ax2,
-        legend=False,
-    )
-    ax2.set_title("Model predictions Household Size", fontsize=16)
-    ax2.set_xlabel("Household Size", fontsize=16)
-    ax2.set_ylabel("Normalised Sales", fontsize=16)
-    for location_id in df_predicted[df_predicted["dataset"] == "test"]["location_id"]:
-        ax2.text(
-            df_predicted.loc[df_predicted["location_id"] == location_id, "household_size"].values[0],
-            df_predicted.loc[df_predicted["location_id"] == location_id, "predicted_normalised_sales"].values[0],
-            location_id,
-            fontsize=12,
+        sns.scatterplot(
+            data=df_predicted,
+            x=col,
+            y="predicted_normalised_sales",
+            hue="dataset",
+            palette=[TESCO_COLORS["light_blue"], TESCO_COLORS["yellow"], TESCO_COLORS["red"]],
+            alpha=0.7,
+            ax=ax,
+            legend=True if col == main_columns[0] else False,
         )
-    sns.scatterplot(
-        data=df_original[df_original["is_train"].astype(bool)],
-        x="crime_rate",
-        y="normalised_sales",
-        color="gray",
-        legend=False,
-        alpha=0.5,
-        ax=ax3,
-    )
-    sns.scatterplot(
-        data=df_predicted,
-        x="crime_rate",
-        y="predicted_normalised_sales",
-        hue="dataset",
-        palette=[TESCO_COLORS["light_blue"], TESCO_COLORS["yellow"], TESCO_COLORS["red"]],
-        alpha=0.7,
-        ax=ax3,
-        legend=False,
-    )
-    ax3.set_title("Model predictions Crime Rate", fontsize=16)
-    ax3.set_xlabel("Crime Rate", fontsize=16)
-    ax3.set_ylabel("Normalised Sales", fontsize=16)
-    for location_id in df_predicted[df_predicted["dataset"] == "test"]["location_id"]:
-        ax3.text(
-            df_predicted.loc[df_predicted["location_id"] == location_id, "crime_rate"].values[0],
-            df_predicted.loc[df_predicted["location_id"] == location_id, "predicted_normalised_sales"].values[0],
-            location_id,
-            fontsize=12,
-        )
+        col_title = col.replace("_", " ").title()
+        ax.grid(True, which="major", linestyle="--")
+        ax.set_xlabel(f"{col_title}", fontsize=16)
+        if col == main_columns[0]:
+            ax.set_ylabel("Normalised Sales", fontsize=16)
+        else:
+            ax.set_ylabel("")
+        ax.legend(fontsize=16)
+        for location_id in df_predicted[df_predicted["dataset"] == "test"]["location_id"]:
+            ax.text(
+                df_predicted.loc[df_predicted["location_id"] == location_id, col].values[0],
+                df_predicted.loc[df_predicted["location_id"] == location_id, "predicted_normalised_sales"].values[0],
+                location_id,
+                fontsize=12,
+            ) 
+    fig.suptitle("Model predictions", fontsize=20)
     plt.tight_layout()
     return fig
 
