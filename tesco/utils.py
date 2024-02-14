@@ -6,7 +6,7 @@ import seaborn as sns
 from tesco.constants import TESCO_COLORS
 
 
-def bland_altman_plot(df: pd.DataFrame, target: str = "normalised_sales", dataset_var: str = "dataset") -> plt.Figure:
+def bland_altman_plot(df: pd.DataFrame, target: str = "normalised_sales", dataset_var: str = "dataset", remove_test: bool = False) -> plt.Figure:
     """Create a Bland–Altman plot to compare the agreement between the predicted and the real data.
 
     Parameters
@@ -27,9 +27,11 @@ def bland_altman_plot(df: pd.DataFrame, target: str = "normalised_sales", datase
         The Bland–Altman plot.
     """
     # Bland–Altman plot
+    if remove_test:
+        df = df[df[dataset_var] != "test"].copy()
 
-    df["pred_real_mean"] = (df[f"predicted_{target}"] + df[target]) / 2
-    df["pred_real_diff"] = df[f"predicted_{target}"] - df[target]
+    df.loc[:, "pred_real_mean"] = (df[f"predicted_{target}"] + df[target]) / 2
+    df.loc[:, "pred_real_diff"] = df[f"predicted_{target}"] - df[target]
 
     fig, ax = plt.subplots(1, 1, figsize=(16 * 0.7, 9 * 0.7))
     sns.scatterplot(
