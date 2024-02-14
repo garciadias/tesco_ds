@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import shap
-
+from scipy.stats import randint
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -19,29 +19,25 @@ from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 
 from tesco.constants import TESCO_COLORS
 from tesco.data.preprocessing import load_preprocessed_data
-from scipy.stats import randint
 
 
-def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+def clean_data(df: pd.DataFrame, remove_columns=["county", "county_code"], index_col="location_id") -> pd.DataFrame:
     """Remove unwanted columns."""
     # Drop columns that are not useful for model training
-    df = df.drop(
-        columns=[
-            "county",
-            "county_code",
-        ]
-    )
-    df.set_index("location_id", inplace=True)
+    df = df.drop(columns=remove_columns)
+    df.set_index(index_col, inplace=True)
     return df
 
 
-def split_data(df: pd.DataFrame, random_state: int) -> pd.DataFrame:
-    # Split the data into train and test sets
-    X_test = df[~df["is_train"]].drop(columns=["normalised_sales", "is_train"])  # noqa
-    y_test = df[~df["is_train"]]["normalised_sales"]
+def split_data(
+    df: pd.DataFrame, random_state: int, y_var: str = "normalised_sales", dataset_var: str = "is_train"
+) -> pd.DataFrame:
+    """Split the data into train, validation and test sets."""
+    X_test = df[~df[dataset_var]].drop(columns=[y_var, dataset_var])  # noqa
+    y_test = df[~df[dataset_var]][y_var]
     X_train, X_val, y_train, y_val = train_test_split(  # noqa
-        df[df["is_train"]].drop(columns=["normalised_sales", "is_train"]),
-        df[df["is_train"]]["normalised_sales"],
+        df[df[dataset_var]].drop(columns=[y_var, dataset_var]),
+        df[df[dataset_var]][y_var],
         test_size=0.2,
         random_state=random_state,
     )
@@ -163,64 +159,8 @@ def compare_original_and_predicted_data(df_original, df_predicted):
                 df_predicted.loc[df_predicted["location_id"] == location_id, "predicted_normalised_sales"].values[0],
                 location_id,
                 fontsize=12,
-            ) 
+            )
     fig.suptitle("Model predictions", fontsize=20)
-    plt.tight_layout()
-    return fig
-
-
-def bland_altman_plot(df_predicted):
-    # Bland–Altman plot
-    df_bland_altman = df_predicted[["normalised_sales", "predicted_normalised_sales", "dataset"]].copy()
-    df_bland_altman = df_bland_altman[df_bland_altman["dataset"].isin(["training", "validation"])]
-
-    df_bland_altman["pred_real_mean"] = (
-        df_bland_altman["predicted_normalised_sales"] + df_bland_altman["normalised_sales"]
-    ) / 2
-    df_bland_altman["pred_real_diff"] = (
-        df_bland_altman["predicted_normalised_sales"] - df_bland_altman["normalised_sales"]
-    )
-    df_bland_altman_validation = df_bland_altman[df_bland_altman["dataset"] == "validation"]
-    fig, ax = plt.subplots(1, 1, figsize=(16 * 0.7, 9 * 0.7))
-    sns.scatterplot(
-        data=df_bland_altman,
-        x="pred_real_mean",
-        y="pred_real_diff",
-        hue="dataset",
-        palette=[TESCO_COLORS["light_blue"], TESCO_COLORS["red"]],
-        ax=ax,
-    )
-    ax.axhline(0, color=TESCO_COLORS["green"], linestyle="-")
-    ax.axhline(df_bland_altman_validation["pred_real_diff"].mean(), color=TESCO_COLORS["red"], linestyle="--")
-    ax.axhline(
-        df_bland_altman_validation["pred_real_diff"].mean() + 1.96 * df_bland_altman_validation["pred_real_diff"].std(),
-        color=TESCO_COLORS["yellow"],
-        linestyle="--",
-    )
-    ax.axhline(
-        df_bland_altman_validation["pred_real_diff"].mean() - 1.96 * df_bland_altman_validation["pred_real_diff"].std(),
-        color=TESCO_COLORS["yellow"],
-        linestyle="--",
-    )
-    ax.set_xlabel("Mean of predicted and real values", fontsize=20)
-    ax.set_ylabel("Predicted values - Real", fontsize=20)
-    ax.set_title("Bland–Altman plot", fontsize=20)
-    xlim = plt.xlim()
-    ylim = plt.ylim()
-    plt.ylim(-1 * max(np.abs(ylim)), max(np.abs(ylim)))
-    plt.tight_layout()
-    xlim = plt.xlim()
-    ylim = plt.ylim()
-    plt.text(
-        xlim[0] + (xlim[1] - xlim[0]) * 0.05,
-        ylim[1] - (ylim[1] - ylim[0]) * 0.1,
-        f"Validation Mean difference: {df_bland_altman_validation['pred_real_diff'].mean():.3f}\n"
-        f"± 1.96 * std: {1.96 * df_bland_altman_validation['pred_real_diff'].std():.3f}",
-        fontsize=16,
-        color="black",
-    )
-    # move legend outside of the plot
-    plt.legend(bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=16)
     plt.tight_layout()
     return fig
 
@@ -294,8 +234,9 @@ if __name__ == "__main__":
     # %%
     # Train a baseline model for comparison. I have compared it with a Dummy Regressor, as a Linear Regressor,
     # but here I will use a non-optimised model as a comparison.
-    baseline_regressor = create_pipeline(RandomForestRegressor(random_state=random_state), numeric_features,
-                                         categorical_features)
+    baseline_regressor = create_pipeline(
+        RandomForestRegressor(random_state=random_state), numeric_features, categorical_features
+    )
     baseline_regressor.fit(X_train, y_train)
     # %%
     y_val_pred = regressor.predict(X_val)
@@ -356,6 +297,8 @@ if __name__ == "__main__":
     test_set.to_csv(f"{model_path}{results_file}")
     joblib.dump(final_model, f"{model_path}{model_file}")
     print("# Create Table 3: Predicted sales")
-    print(test_set.set_index("location_id")[["normalised_sales", "sales_quartile"]].sort_values(
-        "normalised_sales", ascending=False
-    ))
+    print(
+        test_set.set_index("location_id")[["normalised_sales", "sales_quartile"]].sort_values(
+            "normalised_sales", ascending=False
+        )
+    )
