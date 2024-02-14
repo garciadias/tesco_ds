@@ -159,6 +159,13 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-*.csv
 
 data/DS_assignment.zip
+
+data/preprocessed/masked_dataset/data.csv
+
+data/preprocessed/tesco_dataset/data.csv
+
+models/tesco_dataset/tesco_sales_model_metrics.csv
+
+models/tesco_dataset/tesco_sales_model_results.csv
