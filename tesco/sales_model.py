@@ -151,9 +151,9 @@ def compare_original_and_predicted_data(df_original, df_predicted):
         ax.set_xlabel(f"{col_title}", fontsize=16)
         if col == main_columns[0]:
             ax.set_ylabel("Normalised Sales", fontsize=16)
+            ax.legend(fontsize=16)
         else:
             ax.set_ylabel("")
-        ax.legend(fontsize=16)
         for location_id in df_predicted[df_predicted["dataset"] == "test"]["location_id"]:
             ax.text(
                 df_predicted.loc[df_predicted["location_id"] == location_id, col].values[0],

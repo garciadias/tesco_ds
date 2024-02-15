@@ -5,7 +5,6 @@ from typing import Union
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from sklearn.decomposition import PCA
 from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
@@ -16,6 +15,7 @@ from sklearn.pipeline import Pipeline
 
 from tesco.constants import TESCO_COLORS
 from tesco.data.preprocessing import load_preprocessed_data
+from tesco.utils import bland_altman_plot
 
 
 @dataclass
@@ -106,47 +106,3 @@ def plot_linear_regression_model(selector, X_train, X_test, y_train, y_test):  #
     ax2.legend(fontsize=14)
     plt.tight_layout()
     return fig
-
-
-# %%
-if __name__ == "__main__":
-    # %%
-    random_state = 1919
-    df = load_preprocessed_data("masked_dataset")
-    X = df[["x1", "x2"]]
-    y = df["y"]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_state)
-    models = [
-        RandomForestRegressor(random_state=random_state),
-        GradientBoostingRegressor(random_state=random_state),
-        LinearRegression(),
-        Ridge(random_state=random_state),
-        DummyRegressor(),
-    ]
-    decompositions = [PCA(n_components=1, random_state=random_state), None]
-    scalers = [None]
-    evaluations = []
-    selectors = []
-    for decomposition in decompositions:
-        for scaler in scalers:
-            model_selector = ModelSelector(models, "Regression", decomposition, scaler)
-            model_selector.fit(X_train, y_train)
-            model_selector.predict(X_test)
-            model_selector.evaluate(y_test)
-            evaluations.append(model_selector.evaluation_)
-            selectors.append(model_selector)
-    evaluations = pd.concat(evaluations, axis=1).T.sort_values(by="mse")
-    evaluations
-    # %%
-    simplest_model = selectors[1]
-    fig = plot_linear_regression_model(simplest_model, X_train, X_test, y_train, y_test)
-    # %%
-    best_model = selectors[0].fitted_models["GradientBoostingRegressor"]
-    # %%
-    df["dataset"] = "training"
-    df.loc[X_test.index, "dataset"] = "testing"
-    best_model.fit(X_train, y_train)
-    df["predicted_y"] = best_model.predict(df[["x1", "x2"]])
-    fig = bland_altman_plot(df, target="y", dataset_var="dataset")
-    # %%
-    # %%
